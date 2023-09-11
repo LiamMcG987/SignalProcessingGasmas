@@ -1,6 +1,6 @@
 # SignalProcessingGasmas
 
-workflow set up to detect anomalies in signal automatically, and then operate on the signals
+workflow set up to detect anomalies in signal automatically, and then operate on the signals.
 curve fitting, optimisation and visualisation are the main focus points of this workflow
 
 currently 2D reconstructive tomography takes place, with the goal of achieving 3D reconstruction
