@@ -47,6 +47,9 @@ class GasmasSignalProcessing:
         sg_fit = np.asarray(signal.savgol_filter(self.input_signal, 10, 4, deriv=2))
         sg_max = max(sg_fit)
 
+        if sg_max in sg_fit[:5] or sg_max in sg_fit[-5:]:
+            sg_max = max(sg_fit[5:-5])
+
         sg_max_idx = [i for i, x in enumerate(sg_fit) if x == sg_max]
 
         peak_locs_max, _max = signal.find_peaks(sg_fit, prominence=1)
@@ -119,6 +122,7 @@ class GasmasSignalProcessing:
         opt_idx = np.where(diffs[:, 0] == poly_order_opt)[0]
         poly_fit_opt = poly_fits[opt_idx][0]
         print(f'optimal polynomial order is {poly_order_opt}.')
+        self.poly_order_opt = poly_order_opt
         self._calc_transmittance(poly_fit_opt, poly_order_opt)
 
     def _calc_transmittance(self, poly, degree, iterate=False):

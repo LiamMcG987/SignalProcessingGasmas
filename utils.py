@@ -110,7 +110,7 @@ def clean_folder(folder):
             shutil.move(file_path, water_path)
 
 
-def read_data_from_folders(master_folder, angle_interval=None):
+def read_data_from_folders(master_folder, angle_interval=None, fan_beam=False):
     oxygen_data_list, vapour_data_list = [], []
 
     for folder in os.listdir(master_folder):
@@ -124,7 +124,11 @@ def read_data_from_folders(master_folder, angle_interval=None):
         end_angle = int(angle_interval) * folder_len
         angles = np.linspace(0, end_angle, folder_len, endpoint=True)
     else:
-        angles = np.asarray([int(re.search(r'\d+', x).group()) for x in os.listdir(oxygen_data_list[0])])
+        if not fan_beam:
+            angles = np.asarray([int(re.search(r'\d+', x).group()) for x in os.listdir(oxygen_data_list[0])])
+        else:
+            angles = np.unique([int(re.search(r'\d+', x).group()) for x in os.listdir(oxygen_data_list[0])])
+            return [math.radians(x) for x in sorted(angles)]
 
     angles_rads = [math.radians(x) for x in sorted(angles)]
     return sorted(oxygen_data_list), sorted(vapour_data_list), angles_rads
@@ -134,6 +138,3 @@ if __name__ == '__main__':
     folder_test = '../../Measurements/test_folder'
     angle_increment = None
     oxy, vap, angles_tomo = read_data_from_folders(folder_test, angle_increment)
-    print(oxy)
-    print(vap)
-    print(angles_tomo)

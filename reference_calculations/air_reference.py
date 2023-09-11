@@ -1,5 +1,6 @@
 import numpy as np
 from math import exp
+from statistics import mode
 
 from utils import read_input_file, beer_lambert
 from gasmas_calculations.gasmas_signal import GasmasSignalProcessing
@@ -42,11 +43,13 @@ class AirReference:
         gamma_v, s = 2.98E9, 1.936E-11
 
         pathlengths_calc_h2o = np.zeros(len(signals))
+        poly_orders = []
         print('## water vapour ##')
 
         for i, signal in enumerate(signals):
             gasmas = GasmasSignalProcessing(signal, plots=False)
             transmittance_peak = gasmas.transmittance_peak
+            poly_orders.append(gasmas.poly_order_opt)
 
             pathlength = beer_lambert('pathlength', gamma_v, s, transmittance_peak, self.t_atm, self.pressure,
                                       c=conc_eff)
@@ -55,6 +58,7 @@ class AirReference:
 
         print(f'\npathlengths: {pathlengths_calc_h2o}')
         self.pathlengths_calc_h2o = pathlengths_calc_h2o
+        self.opt_poly_order_h2o = mode(np.asarray(poly_orders))
 
     def _calc_o2_conc(self):
         signals = self.signal_o2
@@ -63,10 +67,12 @@ class AirReference:
 
         o2_conc_calc = np.zeros(len(signals))
         calibration_constants = np.zeros(len(signals))
+        poly_orders = []
         print('## oxygen ##')
 
         for i, signal in enumerate(signals):
             gasmas = GasmasSignalProcessing(signal, plots=False)
+            poly_orders.append(gasmas.poly_order_opt)
             transmittance_peak = gasmas.transmittance_peak
             absorbance_peak = 1 - transmittance_peak
             print(f'peak (trans): {round(transmittance_peak, 4)}')
@@ -78,8 +84,8 @@ class AirReference:
             calibration_constants[i] = o2_conc * pathlength / absorbance_peak
         print(f'\noxygen concentrations: {o2_conc_calc * 100}')
         print(f'calibration constants: {calibration_constants}')
-        # breakpoint()
         self.calibration_constant_avg = np.mean(calibration_constants)
+        self.opt_poly_order_o2 = mode(np.asarray(poly_orders))
 
 
 def calc_hwhm(absorbance, peak):

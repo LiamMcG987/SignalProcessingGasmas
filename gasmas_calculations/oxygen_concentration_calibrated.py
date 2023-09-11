@@ -17,11 +17,9 @@ def calc_gasmas_signal(h20_params, o2_params, peaks, cal_constant, temperature, 
     # gasmas_o2_conc = beer_lambert('concentration', gamma_o2, s_o2,
     #                               trans_peak_o2, temperature, pressure,
     #                               pathlength=gasmas_h20_pathlength)
-    print(f'pathlength: {gasmas_h20_pathlength}')
 
     o2_conc_calibrated = gasmas_o2_calc(abs_peak_o2, cal_constant, gasmas_h20_pathlength)
-    print(f'concentration calibrated: {o2_conc_calibrated}')
-    return o2_conc_calibrated
+    return gasmas_h20_pathlength, o2_conc_calibrated
 
 
 def gasmas_o2_calc(abs_peak, constant, pathlength):

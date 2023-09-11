@@ -1,28 +1,43 @@
 import math
 import numpy as np
-import polarTransform as pt
 from scipy import fftpack
 from scipy.interpolate import griddata
 from scipy.ndimage.interpolation import rotate
 import matplotlib.pyplot as plt
 from skimage.transform import radon, iradon
 
+from gasmas_calculations.oxygen_concentration_calibrated import gasmas_o2_calc
+
 
 class DFR2D:
 
-    def __init__(self, projections, angles, iterations):
+    def __init__(self, projections, angles, iterations, calibration_constant, pathlengths=None):
         self.projections = projections
         self.angles = angles
         self.iterations = iterations
+        self.calibration_constant = calibration_constant
+        self.pathlengths = pathlengths if pathlengths is not None else None
+
+        # self._convert_projections_to_oxy()
         self._create_sinogram_radon()
         # self._create_sinogram_manual()
         # self._fourier_transform_1d()
         # self._mlem()
-        self._fsr(dfr=True)
+        self._fsr(dfr=False)
         # self._sinc_transform()
         # self._fourier_transforms()
         # self._slice_theorem()
         # self._reconstruction_from_fourier()
+
+    def _convert_projections_to_oxy(self):
+        oxygen_array = inverse_oxy_conc_calc(self.projections, self.pathlengths, self.calibration_constant)
+        fig, ax = plt.subplots(2)
+        ax[0].imshow(self.projections, aspect='auto')
+        ax[0].set_title('projections')
+        ax[1].imshow(oxygen_array, aspect='auto')
+        ax[1].set_title('oxygen array')
+        plt.show()
+        self.projections = oxygen_array
 
     def _create_sinogram_radon(self):
         projections = np.asarray(self.projections)
@@ -31,6 +46,8 @@ class DFR2D:
         angles_degrees = np.linspace(0, math.degrees(max(angles)), len(angles), endpoint=True)
 
         sinogram = radon(projections_padded, angles_degrees, circle=False)
+        plt.imshow(sinogram)
+        plt.show()
 
         self.projections = projections_padded
         self.sinogram = sinogram
@@ -137,12 +154,11 @@ class DFR2D:
         reconstructed_image = np.asarray(reconstructed_image)
         reconstructed_image_cropped = crop_recon(reconstructed_image)
 
-        plt.imshow(np.real(reconstructed_image))
-        plt.title('Oxygen Concentration Contour')
-        plt.xlabel('Projection Pixels')
-        plt.ylabel('Projection Pixels')
-        plt.show()
-        breakpoint()
+        # fig, ax = plt.subplots()
+        # im = ax.imshow(np.real(reconstructed_image_cropped), aspect='auto')
+        # plt.colorbar(im)
+        # plt.show()
+        self.recon = reconstructed_image_cropped
 
     def _dfr(self, fourier_slices):
         angles = self.angles
@@ -326,29 +342,55 @@ def create_ramp_filter(sinogram_size, show=False):
         plt.title(f'ramp filter for sinogram of size {sinogram_size}')
         plt.show()
 
-    ramp_filter_2d = np.outer(ramp_filter, ramp_filter)
-    print(np.shape(ramp_filter_x))
-    print(np.shape(ramp_filter_2d))
-    fig = plt.figure()
-    ax = plt.axes(projection='3d')
-    for row in ramp_filter_2d:
-        ax.plot(ramp_filter_x, ramp_filter_x, row)
-    plt.show()
-    breakpoint()
+    # ramp_filter_2d = np.outer(ramp_filter, ramp_filter)
+    # print(np.shape(ramp_filter_x))
+    # print(np.shape(ramp_filter_2d))
+    # fig = plt.figure()
+    # ax = plt.axes(projection='3d')
+    # for row in ramp_filter_2d:
+    #     ax.plot(ramp_filter_x, ramp_filter_x, row)
+    # plt.show()
+    # breakpoint()
     return ramp_filter
 
 
 def crop_recon(image):
-    cropped_image = []
-    for row in image:
-        cropped_row = []
-        print(f'max: {max(np.real(row))}')
-        print(f'location of max: {np.where(np.real(row) == max(np.real(row)))[0]}')
-        print(f'min: {min(np.real(row))}')
-        print(f'location of min: {np.where(np.real(row) == min(np.real(row)))[0]}\n')
-        # for i, val in enumerate(row):
-        #     print(val)
-    breakpoint()
+    cut_locations = np.zeros(shape=(np.shape(image)[0], 2))
+
+    for i, row in enumerate(image):
+        ratios = []
+        for j, val in enumerate(np.real(row)):
+            if j == 0:
+                continue
+
+            prev_val = np.real(row[j - 1])
+            ratios.append(abs(val - prev_val))
+        cut_locations[i] = i, get_max_loc(ratios, max(ratios))
+
+    first_cut = get_cuts(cut_locations[:, 1], min)
+    last_cut = get_cuts(cut_locations[:, 1], max)
+
+    image_cropped = np.asarray(image)[:, first_cut:last_cut]
+    projection_axis = np.linspace(0, 65, last_cut - first_cut, endpoint=True)
+
+    return image_cropped
+
+
+def get_cuts(locs, kwarg):
+    try:
+        cut = kwarg(locs)
+    except ValueError:
+        cut = kwarg(locs)[0]
+
+    cut = cut - 20 if kwarg == min else cut + 20
+    return int(cut)
+
+
+def get_max_loc(val_list, max_val):
+    max_loc = np.where(val_list == max_val)[0]
+    if len(max_loc) != 1:
+        max_loc = max_loc[0]
+    return max_loc
 
 
 def pol2cart(radius, angle_radians):
@@ -358,7 +400,19 @@ def pol2cart(radius, angle_radians):
     return x, y
 
 
+def inverse_oxy_conc_calc(recon, pathlengths, cal_constant):
+    # recon_oxy_conc = np.zeros(shape=np.shape(recon))
+    recon_oxy_conc = np.zeros(shape=(np.shape(recon)[0], 1))
+
+    for i, row in enumerate(recon):
+        pathlength = pathlengths[i]
+        peak = max(row)
+        recon_oxy_conc[i, 0] = gasmas_o2_calc(peak, cal_constant, pathlength)
+        # for j, val in enumerate(row):
+        #     recon_oxy_conc[i, j] = gasmas_o2_calc(val, cal_constant, pathlength)
+
+    return recon_oxy_conc
+
+
 if __name__ == '__main__':
     pass
-    # filter = create_ramp_filter(256, show=True)
-    # print(filter)
